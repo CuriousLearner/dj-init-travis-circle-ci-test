@@ -40,7 +40,6 @@ install:
 before_script:
 - export DATABASE_URL=postgres://postgres@localhost/traviscircle
 - psql -c "CREATE DATABASE traviscircle;" -U postgres
-- cp config/database.yml.travis config/database.yml
 
 before_install:
   - sudo service postgresql stop
