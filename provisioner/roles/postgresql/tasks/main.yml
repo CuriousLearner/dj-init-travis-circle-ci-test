@@ -1,0 +1,64 @@
+---
+- name: Update apt-cache if not already ran
+  shell: apt update
+  become: yes
+  when: apt_updated is not defined
+
+# For earlier version of Ubuntu, just make sure to get auth keys to validate
+# official postgres packages
+
+- name: Get auth keys to validate packages from PostgreSQL Repo
+  shell: wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+
+- name: Add to PostgreSQL.list
+  shell: sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -sc)-pgdg main" > /etc/apt/sources.list.d/PostgreSQL.list'
+  become_user: root
+
+- name: install postgres packages for Ubuntu
+  apt:
+    pkg: ['postgresql-11', 'postgresql-contrib', 'python-psycopg2']
+    state: present
+
+- name: install postgis packages for Ubuntu
+  apt:
+    pkg: "postgis-2.5"
+    state: present
+  when: pg_gis
+
+- name: setup database
+  become_user: postgres
+  postgresql_db:
+    db: "{{ pg_db }}"
+    encoding: 'UTF-8'
+    lc_collate: 'en_US.UTF-8'
+    lc_ctype: 'en_US.UTF-8'
+    template: 'template0'
+    state: present
+
+- name: add hstore
+  become_user: postgres
+  shell: psql {{ pg_db }} -c "CREATE EXTENSION IF NOT EXISTS hstore;"
+  when: pg_hstore
+
+- name: add postgis
+  become_user: postgres
+  shell: psql {{ pg_db }} -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+  when: pg_gis
+
+- name: add postgis topology
+  become_user: postgres
+  shell: psql {{ pg_db }} -c "CREATE EXTENSION IF NOT EXISTS postgis_topology;"
+  when: pg_gis
+
+- name: grant access for database to user
+  become_user: postgres
+  postgresql_user:
+    db: "{{ pg_db }}"
+    user: "{{ pg_user }}"
+    password: "{{ pg_password }}"
+    role_attr_flags: "CREATEDB,SUPERUSER"
+    state: present
+    encrypted: yes
+
+- name: ensure postgres is running
+  service: name=postgresql state=started enabled=yes
